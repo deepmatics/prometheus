@@ -1,25 +1,39 @@
 [project]
-name = "zero-to-hero"
+name = "prometheus"
 version = "0.1.0"
-description = "Add your description here"
+description = "Learning Library"
 readme = "README.md"
+authors = [
+    { name = "deepmatics", email = "satish@deepmatics-ai.com" }
+]
 requires-python = ">=3.12"
 dependencies = [
     "jupyter>=1.1.1",
     "matplotlib>=3.11.2",
-    "numpy>=2.5.3",
-    "python-lsp-server>=1.15.0",
-    "torch>=2.14.0",
-    "torchaudio>=2.11.0",
-    "torchvision>=0.29.0",
+    "pandas>=3.0.6",
+    "seaborn>=0.13.2",
+    "torch>=2.14.1",
+    "torchvision>=0.29.1",
 ]
 
 [project.scripts]
-zero-to-hero = "zero_to_hero:main"
+prometheus = "prometheus:main"
 
 [build-system]
-requires = ["uv_build>=0.12.17,<0.13.0"]
+requires = ["uv_build>=0.12.19,<0.13.0"]
 build-backend = "uv_build"
+
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pyright]
+extraPaths = ["src"]
+typeCheckingMode = "basic"
+reportUnknownVariableType = false
+reportUnknownMemberType = false
+reportUnknownArgumentType = false
+reportMissingTypeStubs = false
 
 [[tool.uv.index]]
 name = "pytorch-cu126"
