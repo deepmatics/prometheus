@@ -6,29 +6,31 @@ readme = "README.md"
 authors = [
     { name = "deepmatics", email = "satish@deepmatics-ai.com" }
 ]
-requires-python = ">=3.12"
+requires-python = ">=3.12,<3.13"
 dependencies = [
+    "flash-attn",
+    "ipython>=9.17.1",
     "jupyter>=1.1.1",
     "matplotlib>=3.11.2",
+    "ninja>=1.13.2",
+    "packaging>=26.3",
     "pandas>=3.0.6",
+    "pip>=26.2.1",
     "seaborn>=0.13.2",
+    "setuptools>=84.0.0",
     "torch>=2.14.1",
     "torchvision>=0.29.1",
+    "wheel>=0.48.0",
 ]
 
-[project.scripts]
-prometheus = "prometheus:main"
-
 [build-system]
-requires = ["uv_build>=0.12.19,<0.13.0"]
-build-backend = "uv_build"
-
+requires = ["setuptools>=61.0.0"]
+build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["."]
 
 [tool.pyright]
-extraPaths = ["src"]
 typeCheckingMode = "basic"
 reportUnknownVariableType = false
 reportUnknownMemberType = false
@@ -36,11 +38,18 @@ reportUnknownArgumentType = false
 reportMissingTypeStubs = false
 
 [[tool.uv.index]]
-name = "pytorch-cu126"
-url = "https://download.pytorch.org/whl/cu126"
+name = "pytorch-cu132"
+url = "https://download.pytorch.org/whl/cu132"
 explicit = true
 
 [tool.uv.sources]
-torch = [{ index = "pytorch-cu126" }]
-torchvision = [{ index = "pytorch-cu126" }]
-torchaudio = [{ index = "pytorch-cu126" }]
+torch = [{ index = "pytorch-cu132" }]
+torchvision = [{ index = "pytorch-cu132" }]
+flash-attn = { url = "https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.10.2/flash_attn-2.8.3+cu132torch2.14-cp312-cp312-win_amd64.whl" }
+
+[tool.uv.extra-build-dependencies]
+flash-attn = ["torch"]
+
+[tool.uv]
+preview = true
+
