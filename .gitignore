@@ -216,3 +216,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+*pkl
+*.pt
+
+data/input/*
+data/output/*
+!data/input/.gitkeep
+!data/output/.gitkeep

@@ -1,7 +1,7 @@
 [project]
 name = "prometheus"
 version = "0.1.0"
-description = "Learning Library"
+description = "AI Library"
 readme = "README.md"
 authors = [
     { name = "deepmatics", email = "satish@deepmatics-ai.com" }
@@ -9,11 +9,12 @@ authors = [
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "dataclasses>=0.8",
-    "flash-attn",
+    "datasets>=5.1.0",
     "ipython>=9.17.1",
     "jupyter>=1.1.1",
     "matplotlib>=3.11.2",
     "ninja>=1.13.2",
+    "numpy>=2.5.4",
     "packaging>=26.3",
     "pandas>=3.0.6",
     "pip>=26.2.1",
@@ -48,11 +49,9 @@ explicit = true
 [tool.uv.sources]
 torch = [{ index = "pytorch-cu132" }]
 torchvision = [{ index = "pytorch-cu132" }]
-flash-attn = { url = "https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.10.2/flash_attn-2.8.3+cu132torch2.14-cp312-cp312-win_amd64.whl" }
 
 [tool.uv.extra-build-dependencies]
 flash-attn = ["torch"]
 
 [tool.uv]
 preview = true
-
