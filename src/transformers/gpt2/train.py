@@ -12,20 +12,26 @@ import gc
 from src.transformers.gpt2.model import GPT, gpt2_config
 
 # ---- config ----
-cfg = gpt2_config(block_size=256)     # smaller context = much faster on a small machine
+cfg = gpt2_config()
 device = cfg.device_type
-max_iters = 50000
-eval_interval = 200
-eval_iters = 200
-log_interval = 100
-grad_accum_steps = 4                  # raise (e.g. 4) for a bigger effective batch without more VRAM
+max_iters = 5
+eval_interval = 1000
+eval_iters = 250
+log_interval = 1000
+grad_accum_steps = 16                 # raise (e.g. 4) for a bigger effective batch without more VRAM
 grad_clip = 1.0                       # cap on gradient norm; protects against loss spikes
-warmup_iters = 500                    # LR ramps up from ~0 over these steps
+warmup_iters = 715                    # LR ramps up from ~0 over these steps
 min_lr = cfg.learning_rate / 10       # LR decays down to this by the end
 resume = True                         # continue from last.pt if it exists
+optimizer_beta1 = 0.9                 # GPT-3 Paper
+optimizer_beta2 = 0.95                # GPT-3 Paper
+weight_decay = 0.1                    # GPT-3 Paper; applied to 2D+ params only
+use_compile = True                    # set False if Triton isn't working
+log_interval = 100                    # must differ from eval_interval to see tokens/s
 
-best_path = "ckpt.pt"                 # best validation loss; used for generation
-last_path = "last.pt"                 # latest state incl. optimizer; used to resume
+best_path = "/assets/model-checkpoints/ckpt.pt"                 # best validation loss; used for generation
+last_path = "/assets/model-checkpoints/last.pt"                 # latest state incl. optimizer; used to resume
+os.makedirs(os.path.dirname(last_path), exist_ok=True)
 
 # ---- data: token files made by prepare_data.py ----
 data_dir = "data/output/tinystories"         # folder containing train.bin, val.bin, meta.json
@@ -89,16 +95,46 @@ def save_checkpoint(model, optimizer, it, best_val, is_best):
     state.update(optimizer=optimizer.state_dict(), iter=it, best_val=best_val)
     torch.save(state, last_path)      # everything needed to resume training
 
+# Speed-up: let float32 matmuls run on GPU tensor cores using TF32
+# (rounds inputs to ~10 mantissa bits, accumulates in full fp32).
+# Tensors stay float32; only the multiply step is less precise.
+# Safe for deep learning training; ~1.5-3x faster on Ampere+ GPUs (A100/H100/RTX 30+).
+# Options: 'highest' (default, full fp32) | 'high' (TF32) | 'medium' (bf16, fastest).
+torch.set_float32_matmul_precision('high')
+
 # ---- model + optimizer ----
 model = GPT(cfg).to(device)
 print(f"parameters: {model.get_num_params():,}")
-optimizer = torch.optim.AdamW(model.parameters(), lr=cfg.learning_rate, betas=(0.9, 0.95))
+
+def configure_optimizers(model, weight_decay, learning_rate, betas, device):
+    # start with all of the candidate parameters (that require grad)
+    param_dict = {pn: p for pn, p in model.named_parameters() if p.requires_grad}
+    # 2D+ tensors (matmul weights, embeddings) get weight decay; 1D (biases, LayerNorm) don't
+    decay_params   = [p for p in param_dict.values() if p.dim() >= 2]
+    nodecay_params = [p for p in param_dict.values() if p.dim() < 2]
+    groups = [
+        {"params": decay_params,   "weight_decay": weight_decay},
+        {"params": nodecay_params, "weight_decay": 0.0},
+    ]
+    print(f"decay tensors: {len(decay_params)}, no-decay tensors: {len(nodecay_params)}")
+    # fused AdamW does the update in one GPU kernel (faster)
+    return torch.optim.AdamW(groups, lr=learning_rate, betas=betas, fused=(device == "cuda"))
+
+optimizer = configure_optimizers(model, weight_decay, cfg.learning_rate, (optimizer_beta1, optimizer_beta2), device)
+# Compile the model into optimized fused GPU kernels (less Python overhead and memory traffic)
+cmodel = torch.compile(model) if use_compile else model
 
 # ---- resume ----
 start_it, best_val = 0, float("inf")
 if resume and os.path.exists(last_path):
     ck = torch.load(last_path, map_location=device)
-    model.load_state_dict(ck["model"])
+    # Load the saved training state onto the current device.
+    # torch.compile() wraps a model and prefixes every state_dict key with "_orig_mod."
+    # (e.g. "_orig_mod.wte.weight"), but our raw, uncompiled `model` expects plain keys
+    # ("wte.weight"). Checkpoints saved from a compiled model therefore fail to load with
+    # missing/unexpected key errors. Here we strip that prefix from every key before loading.
+    # removeprefix() is a no-op for keys that don't have it, so clean checkpoints still work.
+    model.load_state_dict({k.removeprefix("_orig_mod."): v for k, v in ck["model"].items()})
     optimizer.load_state_dict(ck["optimizer"])
     start_it, best_val = ck["iter"], ck["best_val"]
     print(f"resumed from step {start_it}, best val {best_val:.4f}")
@@ -111,7 +147,7 @@ for it in range(start_it, max_iters + 1):
         group["lr"] = lr
 
     if it % eval_interval == 0:
-        losses = estimate_loss(model)
+        losses = estimate_loss(cmodel)
         print(f"step {it}: train {losses['train']:.4f}, val {losses['val']:.4f}, lr {lr:.2e}")
         is_best = losses["val"] < best_val
         if is_best:
@@ -126,8 +162,8 @@ for it in range(start_it, max_iters + 1):
     for _ in range(grad_accum_steps):
         x, y = get_batch("train")
         with amp_ctx:
-            _, loss = model(x, y)
-        (loss / grad_accum_steps).backward()   # divide so the summed gradient is an average
+            _, loss = cmodel(x, y)
+        (loss / grad_accum_steps).backward()   # divide so the summed gradient is an average and prevent gradient explosion
 
     if grad_clip:
         torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
@@ -143,8 +179,8 @@ print(f"done. best val loss {best_val:.4f}, saved to {best_path}")
 
 # ---- sample from the best checkpoint ----
 model = GPT.from_checkpoint(best_path)
-print(model.generate_text("What is the colour of the sky?", max_new_tokens=5000))
+print(model.generate_text("What is the colour of the sky?", max_new_tokens=10))
 
-del model, optimizer
+del model, cmodel, optimizer
 gc.collect()
 torch.cuda.empty_cache()

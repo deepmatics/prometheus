@@ -23,6 +23,7 @@ dependencies = [
     "tiktoken>=0.14.0",
     "torch>=2.14.1",
     "torchvision>=0.29.1",
+    "triton-windows<3.7 ; sys_platform == 'win32'",
     "wandb>=0.31.0",
     "wheel>=0.48.0",
 ]

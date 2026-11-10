@@ -220,7 +220,10 @@ __marimo__/
 *pkl
 *.pt
 
-data/input/*
-data/output/*
+**data/input/*
+**data/output/*
 !data/input/.gitkeep
 !data/output/.gitkeep
+
+assets/model-checkpoints/*
+!assets/model-checkpoints/.gitkeep

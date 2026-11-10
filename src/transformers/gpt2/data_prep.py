@@ -23,8 +23,8 @@ class PrepConfig:
     split: str = "train"
     text_column: str = "text"
     out_dir: str = "data/output/tinystories"
-    max_tokens: int = 5_000_000      # start small to test, then scale up
-    val_tokens: int = 500_000
+    max_tokens: int = 5000000      # start small to test, then scale up
+    val_tokens: int = 500000
     tokenizer: str = "gpt2"
     shuffle: bool = False
     no_eot: bool = False
@@ -32,7 +32,6 @@ class PrepConfig:
     threads: int = 8
 
 args = PrepConfig()
- 
  
 def main():
 

@@ -19,7 +19,7 @@ class gpt2_config:
     dropout: float = 0.0
     bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
     device_type: str = 'cuda' if torch.cuda.is_available() else 'cpu'
-    learning_rate = 3e-4
+    learning_rate = 6e-4
 
 cfg = gpt2_config()
 
@@ -197,7 +197,9 @@ class GPT(nn.Module):
         device = self.config.device_type
         idx = torch.tensor([enc.encode_ordinary(prompt)], dtype=torch.long, device=device)
         out = self.generate(idx, max_new_tokens, temperature, top_k)
-        return enc.decode(out[0].tolist())
+        # Filter out any padded token IDs that exceed tiktoken's valid range (max 50256 for gpt2)
+        valid_tokens = [t for t in out[0].tolist() if t < enc.max_token_value + 1]
+        return enc.decode(valid_tokens)
  
     @classmethod
     def from_checkpoint(cls, path):
